@@ -1,0 +1,95 @@
+Code used for C. shasta variant calling pipeline 
+------------------------------------------------------------------------------------
+Quality check and trimming with fastqc and trimgalore
+
+#ran fastqc on forward and reverse reads
+fastqc 1A-C-shasta_R1.fastq.gz #forward reads
+fastqc 1A-C-shasta_R2.fastq.gz #reverse reads
+
+#ran trim_galore on forward and reverse WGBS reads
+trim_galore --paired --trim1 1A-C-shasta_R1.fastq.gz 1A-C-shasta_R2.fastq.gz
+
+#output files:
+1A-C-shasta_R1_val_1.fq
+1A-C-shasta_R2_val_2.fq
+
+------------------------------------------------------------------------------------
+More cleaning with bbsplit
+
+#used bbsplit to clean reads
+bbsplit.sh threads=8 in1=1A-C-shasta_R1_val_1.fq in2=1A-C-shasta_R2_val_2.fq ref=cleaned_genome_Cshasta.fasta basename=cs-bbs-clean%.fq outu1=junk1.fq
+
+#reformated reads from interleaved format back to separate files for forward and reverse reads
+reformat.sh in=cs-bbs-cleancleaned_genome_Cshasta.fq out1=cs-clean-bbs-R1.fq out2=cs-clean-bbs-R2.fq
+
+------------------------------------------------------------------------------------
+Alignment with bwa
+
+#indexed reference genome 
+bwa index cleaned_genome_Cshasta.fasta
+
+#ran seqeunce alignment
+bwa mem cleaned_genome_Cshasta.fasta cs-clean-bbs-R1.fq cs-clean-bbs-R2.fq > cs-clean-bwa.sam
+
+------------------------------------------------------------------------------------
+More cleaning with samtools
+
+#converted sam to bam
+samtools view -Sb cs-clean-bwa.sam > cs-clean-bwa.bam
+
+#sorted bam file
+samtools sort -o cs-clean-bwa.sorted.bam cs-clean-bwa.bam
+
+#indexed bam file
+samtools index cs-clean-bwa.sorted.bam
+
+#extracted proper pairs
+samtools view -b -f 0x2 cs-clean-bwa.sorted.bam > cs-clean-bwa.proper.sorted.bam
+
+#removed duplicate reads
+samtools rmdup cs-clean-bwa.proper.sorted.bam cs-clean-bwa.dedup.proper.sorted.bam
+
+#extracted reads with a map quality of 30 or higher
+samtools view -b -q 30 cs-clean-bwa.dedup.proper.sorted.bam > cs-clean-bwa.dedup.proper.sorted.q30.bam
+
+#indexed final bam file
+samtools index cs-clean-bwa.dedup.proper.sorted.q30.bam
+
+#got stats
+samtools stats cs-clean-bwa.dedup.proper.sorted.q30.bam > stats.txt
+
+#coverage calculations
+average genome coverage = N × L / G, original genome (G), the number of reads (N), and the average read length (L) (divide by 2 if reads are paired)
+average genome coverage = ((105472294 X 150) / 69794587) / 2 = ~113X
+
+------------------------------------------------------------------------------------
+Variant Calling with bcftools and snpsift
+
+#ran variant calling
+bcftools mpileup -Ou -f cleaned_genome_Cshasta.fasta cs-clean-bwa.dedup.proper.sorted.q30.bam | bcftools call -vmO z -o cshasta.vcf.gz
+
+#extracted all SNPs where the sequence depth was greater than or equal to 20
+zcat cshasta.vcf.gz | java -jar snpEff/SnpSift.jar filter "DP >= 20" filtered.vcf
+
+#got variant calling stats
+bcftools stats filtered.vcf > filteredstats.txt
+
+#got number of homozygous SNPs
+cut -f10 filtered.vcf | grep 1/1 | wc -l 
+
+#got SNP density
+vcftools --vcd -filtered.vcf --SNPdensity 1000 -out cs-filtered-1kb.snpden
+
+#got average SNPs per kb
+awk '{ sum += $3; n++ } END {if (n > 0) print sum/ n; }' cs-filtered-1kb.snpden
+
+------------------------------------------------------------------------------------
+Calculate Percent Difference Between Reference Genome and Reads
+
+#converted bam to concensus fasta
+angsd -i cs-clean-bwa.dedup.proper.sorted.q30.bam -doCounts 1 -doFasta 1 -out testchasta.fasta
+
+#used Mauve to compare reference genome (cleaned_genome_Cshasta.fasta) and consensus fasta (testchasta.fasta)
+and then get data to calculate percent difference
+1958220 "SNPs" / 69794587 genome size (bp) * 100 = 2.8% 
+

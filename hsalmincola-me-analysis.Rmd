@@ -1,0 +1,89 @@
+---
+title: "H. salmincola methylation analysis"
+output: html_notebook
+---
+
+
+```{r}
+#load methylKit package
+library(methylKit)
+```
+
+
+```{r}
+#specify directory of H.salmincola BAM file
+hsalminicola="/srv/WolfCloudNFS/HomeWolfCloud1033/rkyger/myxo-meth/2B-H-salmonicola_R1_val_1.fq.gz_unmapped_reads_1.fq.gz_unmapped_reads_1_bismark_pe.deduplicated.sorted.bam"
+```
+
+
+```{r}
+#process Bismark BAM file for CpG methylation
+hsalminicola_meth_CpG=processBismarkAln(location=hsalminicola, sample.id="hsalminicola", assembly="hs-assembly", save.folder = getwd(), save.context = c("CpG"), read.context = "CpG", nolap = TRUE, save.db = FALSE)
+```
+
+
+```{r}
+#get CpG methylation stats for H.salminicola
+getMethylationStats(hsalminicola_meth_CpG, plot=FALSE, both.strands=FALSE)
+
+#get histogram of CpG methylation for H.salminicola
+getMethylationStats(hsalminicola_meth_CpG, plot=TRUE, both.strands=FALSE)
+```
+
+
+```{r}
+#get CpG coverage stats for H.salminicola
+getCoverageStats(hsalminicola_meth_CpG, plot=FALSE, both.strands=FALSE)
+
+#get histogram of CpG coverage for H.salminicola
+getCoverageStats(hsalminicola_meth_CpG, plot=TRUE, both.strands=FALSE)
+```
+
+
+```{r}
+#process Bismark BAM file for CHG methylation
+hsalminicola_meth_CHG=processBismarkAln(location=hsalminicola, sample.id="hsalminicola", assembly="hs-assembly", save.folder = getwd(), save.context = c("CHG"), read.context = "CHG", nolap = TRUE, save.db = FALSE)
+```
+
+
+```{r}
+#get CHG methylation stats for H.salminicola
+getMethylationStats(hsalminicola_meth_CHG, plot=FALSE, both.strands=FALSE)
+
+#get histogram of CHG methylation for H.salminicola
+getMethylationStats(hsalminicola_meth_CHG, plot=TRUE, both.strands=FALSE)
+```
+
+
+```{r}
+#get CHG coverage stats for H.salminicola
+getCoverageStats(hsalminicola_meth_CHG, plot=FALSE, both.strands=FALSE)
+
+#get histogram of CHG coverage for H.salminicola
+getCoverageStats(hsalminicola_meth_CHG, plot=TRUE, both.strands=FALSE)
+```
+
+
+```{r}
+#process Bismark BAM file for CHH methylation
+hsalminicola_meth_CHH=processBismarkAln(location=hsalminicola, sample.id="hsalminicola", assembly="hs-assembly", save.folder = getwd(), save.context = c("CHH"), read.context = "CHH", nolap = TRUE, save.db = FALSE)
+```
+
+
+```{r}
+#get CHH methylation stats for H.salminicola
+getMethylationStats(hsalminicola_meth_CHH, plot=FALSE, both.strands=FALSE)
+
+#get histogram of CHH methylation for H.salminicola
+getMethylationStats(hsalminicola_meth_CHH, plot=TRUE, both.strands=FALSE)
+```
+
+
+```{r}
+#get CHH coverage stats for H.salminicola
+getCoverageStats(hsalminicola_meth_CHH, plot=FALSE, both.strands=FALSE)
+
+#get histogram of CHH coverage for H.salminicola
+getCoverageStats(hsalminicola_meth_CHH, plot=TRUE, both.strands=FALSE)
+```
+

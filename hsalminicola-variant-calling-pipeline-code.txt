@@ -1,0 +1,95 @@
+Code used for H. saliminicola variant calling pipeline 
+------------------------------------------------------------------------------------
+Quality check and trimming with fastqc and trimgalore
+
+#ran fastqc on forward and reverse reads
+fastqc 2A-H-salmonicola_R1.fastq.qz #forward reads
+fastqc 2A-H-salmonicola_R2.fastq.qz #reverse reads
+
+#ran trim_galore on forward and reverse WGBS reads
+trim_galore --paired --trim1 2A-H-salmonicola_R1.fastq.qz 2A-H-salmonicola_R2.fastq.qz
+
+#output files:
+2A-H-salmonicola_R1_val_1.fq 
+2A-H-salmonicola_R2_val_2.fq
+
+------------------------------------------------------------------------------------
+More cleaning with bbsplit
+
+#used bbsplit to clean reads
+bbsplit.sh in1=2A-H-salmonicola_R1_val_1.fq  in2= ref=IDBA_HZS_AllfilterFinal2_300.fasta basename=hs-bbs-clean%.fq outu1=junk1.fq
+
+#reformated reads from interleaved format back to separate files for forward and reverse reads
+reformat.sh in=hs-bbs-cleanIDBA_HZS_AllfilterFinal2_300.fq out1=hs-clean-bbs-R1.fq out2=hs-clean-bbs-R2.fq
+
+------------------------------------------------------------------------------------
+Alignment with bwa
+
+#indexed reference genome 
+bwa index IDBA_HZS_AllfilterFinal2_300.fasta
+
+#ran seqeunce alignment
+bwa mem IDBA_HZS_AllfilterFinal2_300.fasta hs-clean-bbs-R1.fq hs-clean-bbs-R2.fq > hs-clean-bwa.sam
+
+------------------------------------------------------------------------------------
+More cleaning with samtools
+
+#converted sam to bam
+samtools view -Sb hs-clean-bwa.sam > hs-clean-bwa.bam
+
+#sorted bam file
+samtools sort -o hs-clean-bwa.sorted.bam hs-clean-bwa.bam
+
+#indexed bam file
+samtools index hs-clean-bwa.sorted.bam
+
+#extracted proper pairs
+samtools view -b -f 0x2 hs-clean-bwa.sorted.bam > hs-clean-bwa.proper.sorted.bam
+
+#removed duplicate reads
+samtools rmdup hs-clean-bwa.proper.sorted.bam hs-clean-bwa.dedup.proper.sorted.bam
+
+#extracted reads with a map quality of 30 or higher
+samtools view -b -q 30 hs-clean-bwa.dedup.proper.sorted.bam > hs-clean-bwa.dedup.proper.sorted.q30.bam
+
+#indexed final bam file
+samtools index hs-clean-bwa.dedup.proper.sorted.q30.bam
+
+#got stats
+samtools stats hs-clean-bwa.dedup.proper.sorted.q30.bam > stats.txt
+
+#coverage calculations
+average genome coverage = N × L / G, original genome (G), the number of reads (N), and the average read length (L) (divide by 2 if reads are paired)
+average genome coverage = ((307573297 X 150) / 70394302) / 2 = ~327X
+
+------------------------------------------------------------------------------------
+Variant Calling with bcftools and snpsift
+
+#ran variant calling
+bcftools mpileup -Ou -f IDBA_HZS_AllfilterFinal2_300.fasta hs-clean-bwa.dedup.proper.sorted.q30.bam | bcftools call -vmO z -o hsl.vcf.gz
+
+#extracted all SNPs where the sequence depth was greater than or equal to 20
+zcat hsl.vcf.gz | java -jar snpEff/SnpSift.jar filter "DP >= 20" hs-filtered.vcf
+
+#got variant calling stats
+bcftools stats hs-filtered.vcf > hs-filtered.txt
+
+#got number of homozygous SNPs
+cut -f10 hs-filtered.vcf | grep 1/1 | wc -l 
+
+#got SNP density
+vcftools --vcd -filtered.vcf --SNPdensity 1000 -out hs-filtered-1kb.snpden
+
+#got average SNPs per kb
+awk '{ sum += $3; n++ } END {if (n > 0) print sum/ n; }' hs-filtered-1kb.snpden
+
+------------------------------------------------------------------------------------
+Calculate Percent Difference Between Reference Genome and Reads
+
+#converted bam to concensus fasta
+angsd -i hs-clean-bwa.dedup.proper.sorted.q30.bam -doCounts 1 -doFasta 1 -out test-hsal.fasta
+
+#used Mauve to compare reference genome (IDBA_HZS_AllfilterFinal2_300.fasta) and consensus fasta (test-hsal.fasta)
+and then get data to calculate percent difference
+361193 "SNPs" / 70394302 genome size (bp) * 100 = 0.5% 
+
